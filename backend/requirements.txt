@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+
+# Audio processing
+librosa
+numpy
+scipy
+soundfile
+
+# Database
+psycopg2-binary
+redis
+
+# File upload & config
+python-multipart
+python-dotenv
