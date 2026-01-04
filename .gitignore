@@ -1,0 +1,21 @@
+# Node
+node_modules/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Audio & temp files
+audio/temp/*
+!audio/temp/.gitkeep
+
+# Database / cache
+*.rdb
+
+# OS
+.DS_Store
+Thumbs.db
