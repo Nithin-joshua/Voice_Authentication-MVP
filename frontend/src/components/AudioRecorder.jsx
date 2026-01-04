@@ -17,13 +17,27 @@ export default function AudioRecorder() {
       audioChunksRef.current.push(event.data);
     };
 
-    mediaRecorderRef.current.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, {
-        type: "audio/webm",
-      });
-      const url = URL.createObjectURL(audioBlob);
-      setAudioURL(url);
-    };
+    mediaRecorderRef.current.onstop = async () => {
+  const audioBlob = new Blob(audioChunksRef.current, {
+    type: "audio/webm",
+  });
+
+  const formData = new FormData();
+  formData.append("file", audioBlob, "voice.webm");
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/upload-test", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+    console.log("Backend response:", data);
+  } catch (error) {
+    console.error("Upload failed:", error);
+  }
+};
+
 
     mediaRecorderRef.current.start();
     setRecording(true);
