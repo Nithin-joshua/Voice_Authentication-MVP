@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-export default function AudioRecorder() {
+export default function AudioRecorder({ onRecordingComplete }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -13,31 +13,21 @@ export default function AudioRecorder() {
     mediaRecorderRef.current = new MediaRecorder(stream);
     audioChunksRef.current = [];
 
-    mediaRecorderRef.current.ondataavailable = (event) => {
-      audioChunksRef.current.push(event.data);
+    mediaRecorderRef.current.ondataavailable = (e) => {
+      audioChunksRef.current.push(e.data);
     };
 
-    mediaRecorderRef.current.onstop = async () => {
-  const audioBlob = new Blob(audioChunksRef.current, {
-    type: "audio/webm",
-  });
+    mediaRecorderRef.current.onstop = () => {
+      const audioBlob = new Blob(audioChunksRef.current, {
+        type: "audio/webm",
+      });
 
-  const formData = new FormData();
-  formData.append("file", audioBlob, "voice.webm");
+      const url = URL.createObjectURL(audioBlob);
+      setAudioURL(url);
 
-  try {
-    const response = await fetch("http://127.0.0.1:8000/upload-test", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await response.json();
-    console.log("Backend response:", data);
-  } catch (error) {
-    console.error("Upload failed:", error);
-  }
-};
-
+      // 🔥 send blob to parent
+      onRecordingComplete(audioBlob);
+    };
 
     mediaRecorderRef.current.start();
     setRecording(true);
@@ -73,10 +63,7 @@ export default function AudioRecorder() {
       </div>
 
       {audioURL && (
-        <div className="mt-4">
-          <p className="text-sm text-gray-600 mb-2">Recorded Audio:</p>
-          <audio controls src={audioURL} className="w-full" />
-        </div>
+        <audio controls src={audioURL} className="w-full mt-2" />
       )}
     </div>
   );
