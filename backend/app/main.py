@@ -1,8 +1,12 @@
 from fastapi import FastAPI, UploadFile, File
 import os
 import shutil
+from app.api import enroll, authenticate
 
 app = FastAPI(title="Voice Authentication Backend")
+
+app.include_router(enroll.router)
+app.include_router(authenticate.router)
 
 UPLOAD_DIR = "audio/temp"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
