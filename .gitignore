@@ -19,3 +19,6 @@ audio/temp/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Backend audio uploads
+backend/audio/
