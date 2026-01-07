@@ -1,24 +1,34 @@
-import AudioRecorder from "./components/AudioRecorder";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import Enroll from "./pages/Enroll";
+import Login from "./pages/Login";
 
-
-export default function Login() {
+function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center gap-6">
-      <h1 className="text-2xl font-bold text-gray-800">
-        Voice Login
-      </h1>
+    <Router>
+      {/* Navigation Bar */}
+      <nav className="w-full bg-white shadow-md py-4 flex justify-center gap-8">
+        <Link
+          to="/enroll"
+          className="text-blue-600 font-semibold hover:underline"
+        >
+          Enroll
+        </Link>
+        <Link
+          to="/login"
+          className="text-green-600 font-semibold hover:underline"
+        >
+          Login
+        </Link>
+      </nav>
 
-      <p className="text-gray-600 text-sm">
-        Record your voice to authenticate.
-      </p>
-
-      <AudioRecorder />
-
-      <button
-        className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-      >
-        Authenticate
-      </button>
-    </div>
+      {/* Routes */}
+      <Routes>
+        <Route path="/enroll" element={<Enroll />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    </Router>
   );
 }
+
+export default App;
