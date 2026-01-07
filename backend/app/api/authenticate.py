@@ -2,9 +2,14 @@ from fastapi import APIRouter, UploadFile, File, Form
 import shutil
 import os
 import time
+import numpy as np
 
 from app.core.feature_extractor import extract_mfcc
-from app.core.matcher import cosine_similarity, variance_distance
+from app.core.matcher import (
+    cosine_similarity,
+    variance_distance,
+    temporal_consistency
+)
 from app.db.postgres import load_voice_by_email
 from app.db.redis import get_cached_features, get_redis
 
@@ -13,8 +18,19 @@ router = APIRouter()
 UPLOAD_DIR = "audio/temp"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Thresholds
 BASE_SIMILARITY_THRESHOLD = 0.80
 VARIANCE_THRESHOLD = 2.5
+TEMPORAL_THRESHOLD = 15.0
+
+# Score fusion
+FINAL_SCORE_THRESHOLD = 0.75
+
+# Rate limiting
+MAX_ATTEMPTS = 5
+ATTEMPT_WINDOW = 600  # seconds
+
+# Challenge
 CHALLENGE_TTL_SECONDS = 60
 
 
@@ -23,13 +39,25 @@ async def authenticate_voice(
     email: str = Form(...),
     file: UploadFile = File(...)
 ):
-    # -----------------------------
-    # 1️⃣ LIVENESS CHECK (CHALLENGE)
-    # -----------------------------
     r = get_redis()
     if not r:
-        return {"authenticated": False, "reason": "Liveness service unavailable"}
+        return {"authenticated": False, "reason": "Security services unavailable"}
 
+    # --------------------------------------------------
+    # 1️⃣ RATE LIMIT CHECK
+    # --------------------------------------------------
+    attempt_key = f"auth_attempts:{email}"
+    attempts = int(r.get(attempt_key) or 0)
+
+    if attempts >= MAX_ATTEMPTS:
+        return {
+            "authenticated": False,
+            "reason": "Too many failed attempts. Try later."
+        }
+
+    # --------------------------------------------------
+    # 2️⃣ CHALLENGE–RESPONSE (LIVENESS)
+    # --------------------------------------------------
     challenge_key = f"challenge:{email}"
     challenge_data = r.hgetall(challenge_key)
 
@@ -41,18 +69,18 @@ async def authenticate_voice(
         r.delete(challenge_key)
         return {"authenticated": False, "reason": "Challenge expired"}
 
-    # One-time use → prevents replay
-    r.delete(challenge_key)
+    r.delete(challenge_key)  # one-time use
 
- 
-    # 2️⃣ SAVE AUDIO
+    # --------------------------------------------------
+    # 3️⃣ SAVE AUDIO
+    # --------------------------------------------------
     audio_path = os.path.join(UPLOAD_DIR, "login.wav")
     with open(audio_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # -----------------------------
-    # 3️⃣ LOAD USER VOICE PROFILE
-    # -----------------------------
+    # --------------------------------------------------
+    # 4️⃣ LOAD USER PROFILE
+    # --------------------------------------------------
     user_id, mean_vector, std_vector = load_voice_by_email(email)
 
     if mean_vector is None:
@@ -62,25 +90,45 @@ async def authenticate_voice(
     if cached is not None:
         mean_vector = cached
 
-    # -----------------------------
-    # 4️⃣ FEATURE EXTRACTION
-    # -----------------------------
+    # --------------------------------------------------
+    # 5️⃣ FEATURE EXTRACTION
+    # --------------------------------------------------
     test_vector = extract_mfcc(audio_path)
+    segments = np.array_split(test_vector, 3)
 
-    # -----------------------------
-    # 5️⃣ STATISTICAL AUTHENTICATION
-    # -----------------------------
+    # --------------------------------------------------
+    # 6️⃣ METRIC COMPUTATION
+    # --------------------------------------------------
     similarity = cosine_similarity(mean_vector, test_vector)
     variance_score = variance_distance(test_vector, mean_vector, std_vector)
+    temporal_score = temporal_consistency(segments)
 
-    authenticated = (
-        similarity >= BASE_SIMILARITY_THRESHOLD
-        and variance_score <= VARIANCE_THRESHOLD
+    # Normalize scores
+    variance_penalty = max(0.0, 1 - (variance_score / VARIANCE_THRESHOLD))
+    temporal_norm = min(1.0, temporal_score / TEMPORAL_THRESHOLD)
+
+    final_score = (
+        0.5 * similarity +
+        0.3 * variance_penalty +
+        0.2 * temporal_norm
     )
+
+    authenticated = final_score >= FINAL_SCORE_THRESHOLD
+
+    # --------------------------------------------------
+    # 7️⃣ RATE LIMIT UPDATE
+    # --------------------------------------------------
+    if authenticated:
+        r.delete(attempt_key)
+    else:
+        r.incr(attempt_key)
+        r.expire(attempt_key, ATTEMPT_WINDOW)
 
     return {
         "email": email,
         "similarity_score": round(similarity, 3),
         "variance_score": round(variance_score, 3),
+        "temporal_score": round(temporal_score, 3),
+        "final_score": round(final_score, 3),
         "authenticated": authenticated
     }
