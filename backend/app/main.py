@@ -1,9 +1,23 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, UploadFile, File
 import os
 import shutil
 from app.api import enroll, authenticate
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 app = FastAPI(title="Voice Authentication Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(enroll.router)
 app.include_router(authenticate.router)

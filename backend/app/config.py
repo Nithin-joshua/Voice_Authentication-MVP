@@ -10,7 +10,7 @@ class Settings:
     # Database
     POSTGRES_URL = os.getenv(
         "POSTGRES_URL",
-        "postgresql://postgres:postgres@localhost:5432/voice_auth"
+        "postgresql://postgres:postgres123@localhost:5432/voice_auth"
     )
 
     # Redis
