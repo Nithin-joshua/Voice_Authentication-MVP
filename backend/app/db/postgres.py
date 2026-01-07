@@ -9,8 +9,10 @@ def get_connection():
         raise RuntimeError("POSTGRES_URL not set")
     return psycopg2.connect(database_url)
 
-def save_user(name, email, features):
+def save_user(name, email, mean_vector, std_vector):
     user_id = str(uuid.uuid4())
+
+    combined = np.concatenate([mean_vector, std_vector])
 
     conn = get_connection()
     cur = conn.cursor()
@@ -21,7 +23,7 @@ def save_user(name, email, features):
         ON CONFLICT (email)
         DO UPDATE SET voice_features = EXCLUDED.voice_features
         RETURNING id
-    """, (user_id, name, email, psycopg2.Binary(features.tobytes())))
+    """, (user_id, name, email, psycopg2.Binary(combined.tobytes())))
 
     saved_id = cur.fetchone()[0]
 
@@ -46,6 +48,10 @@ def load_voice_by_email(email):
 
     if row:
         user_id, data = row
-        return user_id, np.frombuffer(data, dtype=np.float32)
+        vec = np.frombuffer(data, dtype=np.float32)
+        half = vec.shape[0] // 2
+        mean_vector = vec[:half]
+        std_vector = vec[half:]
+        return user_id, mean_vector, std_vector
 
-    return None, None
+    return None, None, None
