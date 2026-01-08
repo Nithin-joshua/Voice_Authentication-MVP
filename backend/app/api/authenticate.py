@@ -10,6 +10,7 @@ from app.core.matcher import (
     variance_distance,
     temporal_consistency
 )
+from app.core.audio_utils import validate_audio
 from app.db.postgres import load_voice_by_email
 from app.db.redis import get_cached_features, get_redis
 
@@ -69,7 +70,8 @@ async def authenticate_voice(
         r.delete(challenge_key)
         return {"authenticated": False, "reason": "Challenge expired"}
 
-    r.delete(challenge_key)  # one-time use
+    # One-time use (anti-replay)
+    r.delete(challenge_key)
 
     # --------------------------------------------------
     # 3️⃣ SAVE AUDIO
@@ -79,7 +81,14 @@ async def authenticate_voice(
         shutil.copyfileobj(file.file, buffer)
 
     # --------------------------------------------------
-    # 4️⃣ LOAD USER PROFILE
+    # 4️⃣ AUDIO QUALITY VALIDATION (NEW)
+    # --------------------------------------------------
+    is_valid, reason = validate_audio(audio_path)
+    if not is_valid:
+        return {"authenticated": False, "reason": reason}
+
+    # --------------------------------------------------
+    # 5️⃣ LOAD USER PROFILE
     # --------------------------------------------------
     user_id, mean_vector, std_vector = load_voice_by_email(email)
 
@@ -91,19 +100,18 @@ async def authenticate_voice(
         mean_vector = cached
 
     # --------------------------------------------------
-    # 5️⃣ FEATURE EXTRACTION
+    # 6️⃣ FEATURE EXTRACTION
     # --------------------------------------------------
     test_vector = extract_mfcc(audio_path)
     segments = np.array_split(test_vector, 3)
 
     # --------------------------------------------------
-    # 6️⃣ METRIC COMPUTATION
+    # 7️⃣ METRIC COMPUTATION + SCORE FUSION
     # --------------------------------------------------
     similarity = cosine_similarity(mean_vector, test_vector)
     variance_score = variance_distance(test_vector, mean_vector, std_vector)
     temporal_score = temporal_consistency(segments)
 
-    # Normalize scores
     variance_penalty = max(0.0, 1 - (variance_score / VARIANCE_THRESHOLD))
     temporal_norm = min(1.0, temporal_score / TEMPORAL_THRESHOLD)
 
@@ -116,7 +124,7 @@ async def authenticate_voice(
     authenticated = final_score >= FINAL_SCORE_THRESHOLD
 
     # --------------------------------------------------
-    # 7️⃣ RATE LIMIT UPDATE
+    # 8️⃣ RATE LIMIT UPDATE
     # --------------------------------------------------
     if authenticated:
         r.delete(attempt_key)
