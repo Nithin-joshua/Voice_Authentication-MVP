@@ -57,3 +57,48 @@ def load_voice_by_email(email):
 
     return None, None, None, None
 
+def log_auth_attempt(email: str, success: bool, reason: str = None):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO auth_logs (id, email, success, reason)
+        VALUES (%s, %s, %s, %s)
+    """, (
+        str(uuid.uuid4()),
+        email,
+        success,
+        reason
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_auth_logs(limit: int = 100):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT email, success, reason, created_at
+        FROM auth_logs
+        ORDER BY created_at DESC
+        LIMIT %s
+    """, (limit,))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    logs = []
+    for row in rows:
+        logs.append({
+            "email": row[0],
+            "success": row[1],
+            "reason": row[2],
+            "created_at": row[3]
+        })
+
+    return logs
+

@@ -11,7 +11,10 @@ from app.core.matcher import (
     temporal_consistency
 )
 from app.utils.audio_utils import validate_audio
-from app.db.postgres import load_voice_by_email
+from app.db.postgres import (
+    load_voice_by_email,
+    log_auth_attempt
+)
 from app.db.redis import get_cached_features, get_redis
 
 router = APIRouter()
@@ -42,6 +45,7 @@ async def authenticate_voice(
 ):
     r = get_redis()
     if not r:
+        log_auth_attempt(email, False, "Security services unavailable")
         return {"authenticated": False, "reason": "Security services unavailable"}
 
     # --------------------------------------------------
@@ -51,6 +55,7 @@ async def authenticate_voice(
     attempts = int(r.get(attempt_key) or 0)
 
     if attempts >= MAX_ATTEMPTS:
+        log_auth_attempt(email, False, "Rate limit exceeded")
         return {
             "authenticated": False,
             "reason": "Too many failed attempts. Try later."
@@ -63,11 +68,13 @@ async def authenticate_voice(
     challenge_data = r.hgetall(challenge_key)
 
     if not challenge_data:
+        log_auth_attempt(email, False, "Challenge missing or expired")
         return {"authenticated": False, "reason": "Challenge expired or missing"}
 
     issued_at = int(challenge_data.get(b"issued_at", b"0"))
     if time.time() - issued_at > CHALLENGE_TTL_SECONDS:
         r.delete(challenge_key)
+        log_auth_attempt(email, False, "Challenge expired")
         return {"authenticated": False, "reason": "Challenge expired"}
 
     # One-time use (anti-replay)
@@ -85,6 +92,7 @@ async def authenticate_voice(
     # --------------------------------------------------
     is_valid, reason = validate_audio(audio_path)
     if not is_valid:
+        log_auth_attempt(email, False, f"Audio invalid: {reason}")
         return {"authenticated": False, "reason": reason}
 
     # --------------------------------------------------
@@ -93,9 +101,11 @@ async def authenticate_voice(
     user_id, mean_vector, std_vector, is_active = load_voice_by_email(email)
 
     if mean_vector is None:
+        log_auth_attempt(email, False, "User not found")
         return {"authenticated": False, "reason": "User not found"}
 
     if not is_active:
+        log_auth_attempt(email, False, "User disabled by admin")
         return {
             "authenticated": False,
             "reason": "User account is disabled by admin"
@@ -130,13 +140,15 @@ async def authenticate_voice(
     authenticated = final_score >= FINAL_SCORE_THRESHOLD
 
     # --------------------------------------------------
-    # 8️⃣ RATE LIMIT UPDATE
+    # 8️⃣ RATE LIMIT UPDATE + LOGGING
     # --------------------------------------------------
     if authenticated:
         r.delete(attempt_key)
+        log_auth_attempt(email, True)
     else:
         r.incr(attempt_key)
         r.expire(attempt_key, ATTEMPT_WINDOW)
+        log_auth_attempt(email, False, "Biometric mismatch")
 
     return {
         "email": email,

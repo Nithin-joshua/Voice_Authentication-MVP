@@ -1,3 +1,4 @@
+from app.api import admin_logs
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,6 +13,7 @@ from app.api import admin_users
 app = FastAPI(title="Voice Authentication Backend")
 app.include_router(admin_auth.router)
 app.include_router(admin_users.router)
+app.include_router(admin_logs.router)
 
 app.add_middleware(
     CORSMiddleware,
