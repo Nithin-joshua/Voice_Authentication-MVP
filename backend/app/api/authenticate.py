@@ -10,7 +10,7 @@ from app.core.matcher import (
     variance_distance,
     temporal_consistency
 )
-from app.core.audio_utils import validate_audio
+from app.utils.audio_utils import validate_audio
 from app.db.postgres import load_voice_by_email
 from app.db.redis import get_cached_features, get_redis
 

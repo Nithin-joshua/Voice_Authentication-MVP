@@ -4,7 +4,7 @@ import os
 import numpy as np
 
 from app.core.feature_extractor import extract_mfcc
-from app.core.audio_utils import validate_audio
+from app.utils.audio_utils import validate_audio
 from app.db.postgres import save_user
 from app.db.redis import cache_features
 

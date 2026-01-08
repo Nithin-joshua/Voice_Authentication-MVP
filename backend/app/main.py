@@ -6,10 +6,12 @@ import os
 import shutil
 from app.api import enroll, authenticate
 from fastapi.middleware.cors import CORSMiddleware
-
-
+from app.api import admin_auth
+from app.api import admin_users
 
 app = FastAPI(title="Voice Authentication Backend")
+app.include_router(admin_auth.router)
+app.include_router(admin_users.router)
 
 app.add_middleware(
     CORSMiddleware,
