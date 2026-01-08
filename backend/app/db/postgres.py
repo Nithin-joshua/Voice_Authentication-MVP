@@ -38,7 +38,8 @@ def load_voice_by_email(email):
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT id, voice_features FROM users WHERE email = %s
+        SELECT id, voice_features, is_active
+        FROM users WHERE email = %s
     """, (email,))
 
     row = cur.fetchone()
@@ -47,11 +48,12 @@ def load_voice_by_email(email):
     conn.close()
 
     if row:
-        user_id, data = row
+        user_id, data, is_active = row
         vec = np.frombuffer(data, dtype=np.float32)
         half = vec.shape[0] // 2
         mean_vector = vec[:half]
         std_vector = vec[half:]
-        return user_id, mean_vector, std_vector
+        return user_id, mean_vector, std_vector, is_active
 
-    return None, None, None
+    return None, None, None, None
+

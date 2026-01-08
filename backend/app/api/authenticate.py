@@ -81,7 +81,7 @@ async def authenticate_voice(
         shutil.copyfileobj(file.file, buffer)
 
     # --------------------------------------------------
-    # 4️⃣ AUDIO QUALITY VALIDATION (NEW)
+    # 4️⃣ AUDIO QUALITY VALIDATION
     # --------------------------------------------------
     is_valid, reason = validate_audio(audio_path)
     if not is_valid:
@@ -90,10 +90,16 @@ async def authenticate_voice(
     # --------------------------------------------------
     # 5️⃣ LOAD USER PROFILE
     # --------------------------------------------------
-    user_id, mean_vector, std_vector = load_voice_by_email(email)
+    user_id, mean_vector, std_vector, is_active = load_voice_by_email(email)
 
     if mean_vector is None:
         return {"authenticated": False, "reason": "User not found"}
+
+    if not is_active:
+        return {
+            "authenticated": False,
+            "reason": "User account is disabled by admin"
+        }
 
     cached = get_cached_features(user_id)
     if cached is not None:
